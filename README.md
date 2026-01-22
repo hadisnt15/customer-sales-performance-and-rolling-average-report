@@ -1,2 +1,2 @@
-# customer-sales-performance-and-rewards-program-report
-Customer Sales Performance by Program and Customer Claim Rewards by Program Reports
+# customer-sales-performance-and-rolling-average-report
+Customer Monthly Sales Performance and Rolling Average Report

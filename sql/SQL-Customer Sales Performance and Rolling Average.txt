@@ -1,0 +1,134 @@
+parameter:
+:selectedMonth
+:selectedYear
+:previousMonth
+
+
+SELECT
+    T0."CustCode",
+    T0."CustName",
+    T1."Year",
+    T1."Month",
+    T1."Value"
+FROM (
+    -- Customer scope that has order in :selectedMonth and :selectedYear
+    SELECT
+        T0."CustCode",
+        T0."CustName"
+    FROM "ARInvoiceHead" T0
+    WHERE YEAR(T0."DocDate) = :selectedYear AND MONTH(T0."DocDate) = :selectedMonth AND T0."Canceled" = 'N'
+    UNION ALL
+
+    -- Customer scope that has return in :selectedMonth and :selectedYear
+    SELECT
+        T0."CustCode",
+        T0."CustName"
+    FROM "ARCreditMemoHead" T0
+    WHERE YEAR(T0."DocDate) = :selectedYear AND MONTH(T0."DocDate) = :selectedMonth AND T0."Canceled" = 'N'
+    UNION ALL
+
+    -- Customer scope that has order in :previousMonth before :selectedMonth and :selectedYear 
+    SELECT
+        T0."CustCode",
+        T0."CustName"
+    FROM "ARInvoiceHead" T0
+    WHERE YEAR("DocDate") = (SELECT YEAR(ADD_MONTHS(TO_DATE(:selectedYear  || '-' || :selectedMonth || '-01'),-:previousMonth)) FROM DUMMY) 
+    AND MONTH(T0."DocDate) = (SELECT MONTH(ADD_MONTHS(TO_DATE(:selectedYear  || '-' || :selectedMonth || '-01'),-:previousMonth)) FROM DUMMY)
+    AND T0."Canceled" = 'N'
+    UNION ALL
+
+    -- Customer scope that has return in :previousMonth before :selectedMonth and :selectedYear 
+    SELECT
+        T0."CustCode",
+        T0."CustName"
+    FROM "ARCreditMemoHead" T0
+    WHERE YEAR("DocDate") = (SELECT YEAR(ADD_MONTHS(TO_DATE(:selectedYear  || '-' || :selectedMonth || '-01'),-:previousMonth)) FROM DUMMY) 
+    AND MONTH(T0."DocDate) = (SELECT MONTH(ADD_MONTHS(TO_DATE(:selectedYear  || '-' || :selectedMonth || '-01'),-:previousMonth)) FROM DUMMY)
+    AND T0."Canceled" = 'N'
+) T0
+JOIN (
+    -- Monthly customer sales performance that has order in :selectedMonth and :selectedYear
+    SELECT DISTINCT
+        T0."CustCode",
+        T0."CustName",
+        YEAR(T0."DocDate") "Year",
+        MONTH(T0."DocDate") "Month",
+        SUM(T1."LineTotal) OVER(PARTITION BY T0."CustCode",  YEAR(T0."DocDate"),  MONTH(T0."DocDate")) "Value"
+    FROM "ARInvoiceHead" T0
+    JOIN "ARInvoiceRow" T1 ON T1."DocEntry" = T0."DocEntry"
+    WHERE YEAR(T0."DocDate) = :selectedYear AND MONTH(T0."DocDate) = :selectedMonth AND T0."Canceled" = 'N'
+    UNION ALL
+
+    -- Monthly customer sales performance that has return in :selectedMonth and :selectedYear
+    SELECT DISTINCT
+        T0."CustCode",
+        T0."CustName",
+        YEAR(T0."DocDate") "Year",
+        MONTH(T0."DocDate") "Month",
+        0-SUM(T1."LineTotal) OVER(PARTITION BY T0."CustCode",  YEAR(T0."DocDate"),  MONTH(T0."DocDate")) "Value"
+    FROM "ARCreditMemoHead" T0
+    JOIN "ARCreditMemoRow" T1 ON T1."DocEntry" = T0."DocEntry"
+    WHERE YEAR(T0."DocDate) = :selectedYear AND MONTH(T0."DocDate) = :selectedMonth AND T0."Canceled" = 'N'
+    UNION ALL
+
+    -- Monthly customer sales performance that has order in :previousMonth before :selectedMonth and :selectedYear 
+    SELECT DISTINCT
+        T0."CustCode",
+        T0."CustName",
+        YEAR(T0."DocDate") "Year",
+        MONTH(T0."DocDate") "Month",
+        SUM(T1."LineTotal) OVER(PARTITION BY T0."CustCode",  YEAR(T0."DocDate"),  MONTH(T0."DocDate")) "Value"
+    FROM "ARInvoiceHead" T0
+    JOIN "ARInvoiceRow" T1 ON T1."DocEntry" = T0."DocEntry"
+    WHERE YEAR("DocDate") = (SELECT YEAR(ADD_MONTHS(TO_DATE(:selectedYear  || '-' || :selectedMonth || '-01'),-:previousMonth)) FROM DUMMY) 
+    AND MONTH(T0."DocDate) = (SELECT MONTH(ADD_MONTHS(TO_DATE(:selectedYear  || '-' || :selectedMonth || '-01'),-:previousMonth)) FROM DUMMY)
+    AND T0."Canceled" = 'N'
+    UNION ALL
+
+    -- Monthly customer sales performance that has return in :previousMonth before :selectedMonth and :selectedYear 
+    SELECT DISTINCT
+        T0."CustCode",
+        T0."CustName",
+        YEAR(T0."DocDate") "Year",
+        MONTH(T0."DocDate") "Month",
+        0-SUM(T1."LineTotal) OVER(PARTITION BY T0."CustCode",  YEAR(T0."DocDate"),  MONTH(T0."DocDate")) "Value"
+    FROM "ARCreditMemoHead" T0
+    JOIN "ARCreditMemoRow" T1 ON T1."DocEntry" = T0."DocEntry"
+    WHERE YEAR("DocDate") = (SELECT YEAR(ADD_MONTHS(TO_DATE(:selectedYear  || '-' || :selectedMonth || '-01'),-:previousMonth)) FROM DUMMY) 
+    AND MONTH(T0."DocDate) = (SELECT MONTH(ADD_MONTHS(TO_DATE(:selectedYear  || '-' || :selectedMonth || '-01'),-:previousMonth)) FROM DUMMY)
+    AND T0."Canceled" = 'N'
+    UNION ALL
+
+    -- Average customer sales performance in :previousMonth
+    SELECT
+        "CustCode",
+        "CustName",
+        '9999' "Year",
+        '99' "Month",
+        ((SUM("Value") OVER(PARTITION BY "CustCode))/:previousMonth) "Value"
+    FROM (
+        SELECT DISTINCT
+            T0."CustCode",
+            T0."CustName",
+            YEAR(T0."DocDate") "Year",
+            MONTH(T0."DocDate") "Month",
+            SUM(T1."LineTotal) OVER(PARTITION BY T0."CustCode",  YEAR(T0."DocDate"),  MONTH(T0."DocDate")) "Value"
+        FROM "ARInvoiceHead" T0
+        JOIN "ARInvoiceRow" T1 ON T1."DocEntry" = T0."DocEntry"
+        WHERE YEAR("DocDate") = (SELECT YEAR(ADD_MONTHS(TO_DATE(:selectedYear  || '-' || :selectedMonth || '-01'),-:previousMonth)) FROM DUMMY) 
+        AND MONTH(T0."DocDate) = (SELECT MONTH(ADD_MONTHS(TO_DATE(:selectedYear  || '-' || :selectedMonth || '-01'),-:previousMonth)) FROM DUMMY)
+        AND T0."Canceled" = 'N'
+        UNION ALL
+        SELECT DISTINCT
+            T0."CustCode",
+            T0."CustName",
+            YEAR(T0."DocDate") "Year",
+            MONTH(T0."DocDate") "Month",
+            0-SUM(T1."LineTotal) OVER(PARTITION BY T0."CustCode",  YEAR(T0."DocDate"),  MONTH(T0."DocDate")) "Value"
+        FROM "ARCreditMemoHead" T0
+        JOIN "ARCreditMemoRow" T1 ON T1."DocEntry" = T0."DocEntry"
+        WHERE YEAR("DocDate") = (SELECT YEAR(ADD_MONTHS(TO_DATE(:selectedYear  || '-' || :selectedMonth || '-01'),-:previousMonth)) FROM DUMMY) 
+        AND MONTH(T0."DocDate) = (SELECT MONTH(ADD_MONTHS(TO_DATE(:selectedYear  || '-' || :selectedMonth || '-01'),-:previousMonth)) FROM DUMMY)
+        AND T0."Canceled" = 'N'
+    )
+) T1 ON T1."CustCode" = T0."CustCode"
