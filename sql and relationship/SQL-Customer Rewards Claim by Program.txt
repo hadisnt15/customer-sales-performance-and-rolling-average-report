@@ -1,0 +1,33 @@
+SELECT  
+    T0."ProgramCode",
+    T0."ProgramDesc",
+    T2."StartDate",
+    T2."EndDate",
+    T1."CustCode",
+    T1."CustName",
+    T1."TotalReward",
+    T3."RedeemedReward",
+    T1."TotalReward"-T3."RedeemedReward" "RemainingReward",
+    CASE WHEN T1."TotalReward"-T3."RedeemedReward" > 0 'OPEN' ELSE 'CLOSED' END "Status"
+FROM "RewardCustProgramHead" T0
+JOIN "RewardCustProgramRow" T1 ON T1."DocEntry" = T0."DocEntry"
+JOIN "DetailProgramHead" T2 ON T2."ProgramCode" = T0."ProgramCode
+LEFT JOIN (
+    SELECT
+        "Program",
+        "CustCode",
+        "CustName",
+        SUM("Amount") OVER(PARTITION BY "Program", "CustCode") "RedeemedReward"
+    FROM (
+        SELECT
+            T0."DocNum",
+            T0."DocDate",
+            T1."Program",
+            T1."CustCode",
+            T1."CustName",
+            T1."Amount"
+        FROM "OutgoingPaymentHead" T0
+        JOIN "OutgoingPaymentRow" T1 ON T1."DocEntry" = T0."DocEntry
+        WHERE T0."Canceled" = 'N'
+    )
+) T3 ON T3."ProgramCode" = T0."ProgramCode" AND T3."CustCode" = T1."CustCode"
